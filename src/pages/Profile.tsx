@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 
 const Profile = () => {
-  const { user, updateProfile } = useAuth();
+  const { user, updateUserProfile } = useAuth();
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
@@ -28,7 +28,7 @@ const Profile = () => {
       setError('');
       setMessage('');
       setLoading(true);
-      await updateProfile({ displayName });
+      await updateUserProfile(displayName);
       setMessage('Profile updated successfully');
     } catch (err: any) {
       setError(err.message || 'Failed to update profile');

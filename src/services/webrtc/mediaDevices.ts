@@ -1,199 +1,102 @@
 class MediaDevicesService {
   private localStream: MediaStream | null = null;
   private screenStream: MediaStream | null = null;
-
-  async getLocalStream(): Promise<MediaStream> {
+  async getLocalStream(forceNew = false): Promise<MediaStream> {
     try {
-      if (this.localStream) {
+      // Return existing stream if available and not forcing new
+      if (this.localStream && !forceNew) {
         return this.localStream;
       }
-
-      // Get saved media settings from localStorage
-      const savedSettings = localStorage.getItem('media-settings');
-      const settings = savedSettings ? JSON.parse(savedSettings) : {};
+      console.log('Requesting media devices...');
       
-      // First check if devices are available
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const hasAudioDevice = devices.some(device => device.kind === 'audioinput');
-      const hasVideoDevice = devices.some(device => device.kind === 'videoinput');
+      // First check if browser supports getUserMedia
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Your browser does not support media devices');
+      }
       
-      // Get user media with audio and video based on available devices
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: hasAudioDevice ? (settings.audioDeviceId ? { deviceId: { exact: settings.audioDeviceId } } : true) : false,
-        video: hasVideoDevice ? (settings.videoDeviceId ? { deviceId: { exact: settings.videoDeviceId } } : true) : false
-      });
-      
-      this.localStream = stream;
-      return stream;
-    } catch (error) {
-      console.error('Error getting local stream:', error);
-      
-      // Try fallback options if specific device failed
+      // Check for permissions first
       try {
-        console.log('Trying fallback with default devices...');
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        console.log('Available devices:', devices);
+      } catch (err) {
+        console.warn('Error enumerating devices:', err);
+      }
+      
+      // Try to get both audio and video
+      try {
+        console.log('Requesting audio and video...');
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: true,
-          video: true
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
         });
         
+        console.log('Got stream with tracks:', stream.getTracks().map(t => `${t.kind}: ${t.label}`));
         this.localStream = stream;
         return stream;
-      } catch (fallbackError) {
-        console.error('Fallback also failed:', fallbackError);
+      } catch (err) {
+        console.warn('Could not get both audio and video:', err);
         
-        // Last resort: try with just audio if video failed
+        // Try with just audio if video fails
         try {
           console.log('Trying audio only...');
-          const audioOnlyStream = await navigator.mediaDevices.getUserMedia({
+          const audioStream = await navigator.mediaDevices.getUserMedia({
             audio: true,
             video: false
           });
           
-          this.localStream = audioOnlyStream;
-          return audioOnlyStream;
-        } catch (audioOnlyError) {
-          console.error('Audio only also failed:', audioOnlyError);
-          throw new Error('Failed to access media devices. Please check your camera and microphone permissions.');
+          console.log('Got audio-only stream');
+          this.localStream = audioStream;
+          return audioStream;
+        } catch (audioErr) {
+          console.error('Failed to get audio:', audioErr);
+          throw new Error('Could not access microphone. Please check your permissions.');
         }
       }
+    } catch (error) {
+      console.error('Error getting local stream:', error);
+      throw error;
     }
   }
-  stopLocalStream(): void {
-    if (this.localStream) {
-      this.localStream.getTracks().forEach(track => track.stop());
-      this.localStream = null;
-    }
-  }
-
   async getScreenShareStream(): Promise<MediaStream> {
     try {
       if (this.screenStream) {
         return this.screenStream;
       }
-
+      // @ts-ignore - TypeScript doesn't recognize getDisplayMedia on mediaDevices
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: true
+        video: {
+          cursor: 'always',
+          displaySurface: 'monitor'
+        },
+        audio: false
       });
-      
       this.screenStream = stream;
-      
-      // Handle when user stops sharing screen
-      stream.getVideoTracks()[0].onended = () => {
-        this.stopScreenShare();
-      };
-      
       return stream;
     } catch (error) {
       console.error('Error getting screen share stream:', error);
-      throw new Error('Failed to share screen');
+      throw error;
     }
   }
-
-  stopScreenShare(): void {
+  stopLocalStream() {
+    if (this.localStream) {
+      this.localStream.getTracks().forEach(track => track.stop());
+      this.localStream = null;
+    }
+  }
+  stopScreenShare() {
     if (this.screenStream) {
       this.screenStream.getTracks().forEach(track => track.stop());
       this.screenStream = null;
     }
   }
-
-  toggleAudio(enabled: boolean): void {
-    if (this.localStream) {
-      this.localStream.getAudioTracks().forEach(track => {
-        track.enabled = enabled;
-      });
-    }
-  }
-
-  toggleVideo(enabled: boolean): void {
-    if (this.localStream) {
-      this.localStream.getVideoTracks().forEach(track => {
-        track.enabled = enabled;
-      });
-    }
-  }
-
-  async switchAudioDevice(deviceId: string): Promise<MediaStream> {
-    try {
-      if (!this.localStream) {
-        throw new Error('No local stream available');
-      }
-      
-      // Stop current audio tracks
-      this.localStream.getAudioTracks().forEach(track => track.stop());
-      
-      // Get new audio stream
-      const newAudioStream = await navigator.mediaDevices.getUserMedia({
-        audio: { deviceId: { exact: deviceId } }
-      });
-      
-      // Replace audio track in local stream
-      const newAudioTrack = newAudioStream.getAudioTracks()[0];
-      
-      // Remove old audio tracks
-      this.localStream.getAudioTracks().forEach(track => {
-        this.localStream!.removeTrack(track);
-      });
-      
-      // Add new audio track
-      this.localStream.addTrack(newAudioTrack);
-      
-      // Update settings in localStorage
-      const savedSettings = localStorage.getItem('media-settings');
-      const settings = savedSettings ? JSON.parse(savedSettings) : {};
-      localStorage.setItem('media-settings', JSON.stringify({
-        ...settings,
-        audioDeviceId: deviceId
-      }));
-      
-      return this.localStream;
-    } catch (error) {
-      console.error('Error switching audio device:', error);
-      throw new Error('Failed to switch audio device');
-    }
-  }
-
-  async switchVideoDevice(deviceId: string): Promise<MediaStream> {
-    try {
-      if (!this.localStream) {
-        throw new Error('No local stream available');
-      }
-      
-      // Stop current video tracks
-      this.localStream.getVideoTracks().forEach(track => track.stop());
-      
-      // Get new video stream
-      const newVideoStream = await navigator.mediaDevices.getUserMedia({
-        video: { deviceId: { exact: deviceId } }
-      });
-      
-      // Replace video track in local stream
-      const newVideoTrack = newVideoStream.getVideoTracks()[0];
-      
-      // Remove old video tracks
-      this.localStream.getVideoTracks().forEach(track => {
-        this.localStream!.removeTrack(track);
-      });
-      
-      // Add new video track
-      this.localStream.addTrack(newVideoTrack);
-      
-      // Update settings in localStorage
-      const savedSettings = localStorage.getItem('media-settings');
-      const settings = savedSettings ? JSON.parse(savedSettings) : {};
-      localStorage.setItem('media-settings', JSON.stringify({
-        ...settings,
-        videoDeviceId: deviceId
-      }));
-      
-      return this.localStream;
-    } catch (error) {
-      console.error('Error switching video device:', error);
-      throw new Error('Failed to switch video device');
-    }
-  }
-
   async getAudioDevices(): Promise<{ id: string; label: string }[]> {
     try {
+      // Request permissions first to get labeled devices
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      
       const devices = await navigator.mediaDevices.enumerateDevices();
       return devices
         .filter(device => device.kind === 'audioinput')
@@ -206,9 +109,11 @@ class MediaDevicesService {
       return [];
     }
   }
-
   async getVideoDevices(): Promise<{ id: string; label: string }[]> {
     try {
+      // Request permissions first to get labeled devices
+      await navigator.mediaDevices.getUserMedia({ video: true });
+      
       const devices = await navigator.mediaDevices.enumerateDevices();
       return devices
         .filter(device => device.kind === 'videoinput')
@@ -218,21 +123,6 @@ class MediaDevicesService {
         }));
     } catch (error) {
       console.error('Error getting video devices:', error);
-      return [];
-    }
-  }
-
-  async getAudioOutputDevices(): Promise<{ id: string; label: string }[]> {
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      return devices
-        .filter(device => device.kind === 'audiooutput')
-        .map(device => ({
-          id: device.deviceId,
-          label: device.label || `Speaker ${device.deviceId.substring(0, 5)}...`
-        }));
-    } catch (error) {
-      console.error('Error getting audio output devices:', error);
       return [];
     }
   }

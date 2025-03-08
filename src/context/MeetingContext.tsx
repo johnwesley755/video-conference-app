@@ -2,7 +2,7 @@ import { createContext, useState, useEffect, ReactNode } from 'react';
 import { useSocket } from '../hooks/useSocket';
 import { useAuth } from '../hooks/useAuth';
 import { Participant } from '../types/participant';
-import { ChatMessage } from '../types/chat';
+import { ChatMessage } from '@/types/chat';
 
 interface MeetingContextType {
   meetingId: string | null;
@@ -121,7 +121,7 @@ export const MeetingProvider = ({ children }: MeetingProviderProps) => {
       content,
       senderId: user.uid,
       senderName: user.displayName || 'Anonymous',
-      timestamp: new Date().toISOString(),
+      timestamp: new Date(), // Changed from string to Date object
     };
 
     socket.emit('send-message', {

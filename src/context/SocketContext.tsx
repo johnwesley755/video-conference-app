@@ -36,21 +36,20 @@ export const SocketProvider = ({ children }: SocketProviderProps) => {
       return;
     }
 
-    // Connect to socket server with CORS options
+    // Connect to socket server
     const socketInstance = io(import.meta.env.VITE_SOCKET_SERVER_URL || 'http://localhost:5000', {
       auth: {
         token: user.uid,
         displayName: user.displayName,
         email: user.email,
       },
-      withCredentials: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
       timeout: 10000
     });
 
     socketInstance.on('connect', () => {
-      console.log('Socket connected');
+      console.log('Socket connected with ID:', socketInstance.id);
       setIsConnected(true);
       setConnectionError(null);
     });
