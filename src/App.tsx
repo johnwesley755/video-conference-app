@@ -17,6 +17,7 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import MeetingHistory from './pages/MeetingHistory';
 import NotFound from './pages/NotFound';
+import LandingPage from './pages/LandingPage';
 
 function App() {
   const { user, loading } = useAuth();
@@ -35,20 +36,23 @@ function App() {
 
   return (
     <Routes>
+      {/* Landing page for non-authenticated users, redirect to home for authenticated users */}
+      <Route path="/" element={user ? <Navigate to="/home" /> : <LandingPage />} />
+      
       {/* Public routes */}
       <Route path="/join/:meetingId" element={<JoinMeeting />} />
       
       {/* Auth routes */}
       <Route element={<AuthLayout />}>
-        <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
-        <Route path="/register" element={!user ? <Register /> : <Navigate to="/" />} />
+        <Route path="/login" element={!user ? <Login /> : <Navigate to="/home" />} />
+        <Route path="/register" element={!user ? <Register /> : <Navigate to="/home" />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
       </Route>
       
       {/* Protected routes */}
       <Route element={<MainLayout />}>
-        <Route path="/" element={user ? <Home /> : <Navigate to="/login" />} />
+        <Route path="/home" element={user ? <Home /> : <Navigate to="/login" />} />
         <Route path="/create" element={user ? <CreateMeeting /> : <Navigate to="/login" />} />
         <Route path="/profile" element={user ? <Profile /> : <Navigate to="/login" />} />
         <Route path="/settings" element={user ? <Settings /> : <Navigate to="/login" />} />
