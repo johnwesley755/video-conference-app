@@ -85,21 +85,10 @@ const Sidebar = ({ isOpen }: SidebarProps) => {
         </nav>
         
         <div className="p-4 mt-auto border-t border-secondary-100">
-          <div className="bg-primary-50 rounded-lg p-4">
-            <h3 className="font-medium text-primary-700 mb-2">Need Help?</h3>
-            <p className="text-sm text-secondary-600 mb-3">
-              Check our documentation or contact support for assistance.
+          <div className="flex items-center justify-center">
+            <p className="text-sm text-secondary-500">
+              © {new Date().getFullYear()} VideoMeet
             </p>
-            <Link
-              to="/support"
-              className="text-sm text-primary-600 hover:text-primary-700 font-medium flex items-center"
-            >
-              <span>Support Center</span>
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="ml-1">
-                <path d="M5 12h14"></path>
-                <path d="m12 5 7 7-7 7"></path>
-              </svg>
-            </Link>
           </div>
         </div>
       </div>
