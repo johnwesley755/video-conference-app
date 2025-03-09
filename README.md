@@ -1,4 +1,4 @@
-
+**
 🎥 Video Conferencing App
 
 A modern, responsive video conferencing app UI built with React, Vite, and Tailwind CSS. 🔥 This app provides a seamless video call experience with features like grid & speaker view, chat, screen sharing, virtual backgrounds, and more!
@@ -76,3 +76,4 @@ Navigate to http://localhost:5173/ 🚀
 
 This should be perfect for your project! 🚀 Let me know if you need any changes. 😃
 
+**
