@@ -194,20 +194,13 @@ const Meeting = () => {
     const pc = new RTCPeerConnection({
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        { 
-          urls: 'turn:numb.viagenie.ca',
-          username: 'webrtc@live.com',
-          credential: 'muazkh'
-        }
+        { urls: 'stun:stun1.l.google.com:19302' }
       ]
     });
-    
     // Add local tracks to peer connection
     stream.getTracks().forEach(track => {
       pc.addTrack(track, stream);
     });
-    
     // Handle ICE candidates
     pc.onicecandidate = (event) => {
       if (event.candidate) {
@@ -217,31 +210,17 @@ const Meeting = () => {
         });
       }
     };
-    
-    // Handle connection state changes
-    pc.onconnectionstatechange = () => {
-      console.log(`Connection state for ${participantId}: ${pc.connectionState}`);
-      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-        // Try to reconnect
-        console.log(`Reconnecting to ${participantId}...`);
-        pc.restartIce();
-      }
-    };
-    
     // Handle remote tracks
     pc.ontrack = (event) => {
-      console.log(`Received track from ${participantId}`, event.streams[0]);
       const remoteStream = new MediaStream();
       event.streams[0].getTracks().forEach(track => {
         remoteStream.addTrack(track);
       });
-      
       setRemoteStreams(prev => ({
         ...prev,
         [participantId]: remoteStream
       }));
     };
-    
     // Create and send offer
     pc.createOffer()
       .then(offer => pc.setLocalDescription(offer))
@@ -254,15 +233,73 @@ const Meeting = () => {
       .catch(error => {
         console.error('Error creating offer:', error);
       });
-    
     peerConnections.current[participantId] = pc;
     return pc;
   };
-
+  // Send signaling message to a participant
+  const sendSignalingMessage = async (to: string, message: any) => {
+    if (!meetingId) return;
+    try {
+      const meetingRef = doc(db, 'meetings', meetingId);
+      const signalRef = collection(meetingRef, 'signals');
+      
+      await addDoc(signalRef, {
+        from: user?.uid || 'anonymous',
+        to,
+        message,
+        timestamp: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Error sending signaling message:', error);
+      // Don't show toast for every signaling error to avoid spamming the user
+    }
+  };
+  // Handle incoming signaling message
+  const handleSignalingMessage = async (from: string, message: any) => {
+    if (!peerConnections.current[from]) {
+      if (localStream) {
+        createPeerConnection(from, localStream);
+      }
+    }
+    const pc = peerConnections.current[from];
+    if (!pc) return;
+    if (message.type === 'offer') {
+      await pc.setRemoteDescription(new RTCSessionDescription(message.sdp));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      sendSignalingMessage(from, {
+        type: 'answer',
+        sdp: pc.localDescription
+      });
+    } else if (message.type === 'answer') {
+      await pc.setRemoteDescription(new RTCSessionDescription(message.sdp));
+    } else if (message.type === 'ice-candidate') {
+      await pc.addIceCandidate(new RTCIceCandidate(message.candidate));
+    }
+  };
+  // Toggle camera
+  const toggleCamera = () => {
+    if (localStream) {
+      localStream.getVideoTracks().forEach(track => {
+        track.enabled = !isCameraOn;
+      });
+      setIsCameraOn(!isCameraOn);
+    }
+  };
+  // Toggle microphone
+  const toggleMic = () => {
+    if (localStream) {
+      localStream.getAudioTracks().forEach(track => {
+        track.enabled = !isMicOn;
+      });
+      setIsMicOn(!isMicOn);
+    }
+  };
   // Toggle screen sharing
   const toggleScreenSharing = async () => {
     if (!isScreenSharing) {
       try {
+        // Request screen sharing with a more user-friendly approach
         toast.info("Please select the screen or window you want to share");
         
         const screenStream = await navigator.mediaDevices.getDisplayMedia({
@@ -303,16 +340,6 @@ const Meeting = () => {
           
           setIsScreenSharing(true);
           toast.success("Screen sharing started");
-          
-          // Notify other participants about screen sharing
-          participants.forEach(participant => {
-            if (participant.id !== (user?.uid || 'anonymous')) {
-              sendSignalingMessage(participant.id, {
-                type: 'screen-sharing-started',
-                from: user?.uid || 'anonymous'
-              });
-            }
-          });
         }
       } catch (error) {
         console.error('Error sharing screen:', error);
@@ -369,16 +396,6 @@ const Meeting = () => {
         
         setIsScreenSharing(false);
         toast.info("Screen sharing stopped");
-        
-        // Notify other participants about screen sharing stopped
-        participants.forEach(participant => {
-          if (participant.id !== (user?.uid || 'anonymous')) {
-            sendSignalingMessage(participant.id, {
-              type: 'screen-sharing-stopped',
-              from: user?.uid || 'anonymous'
-            });
-          }
-        });
       } catch (error) {
         console.error('Error reverting to camera:', error);
         setIsScreenSharing(false);
